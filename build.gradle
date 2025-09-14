@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.intellij' version '1.17.3'
+}
+
+group 'io.github.easy.tools'
+version '1.0.0-SNAPSHOT'
+
+repositories {
+    maven {
+        url 'https://maven.aliyun.com/repository/public'
+    }
+    maven {
+        url 'https://maven.aliyun.com/repository/jcenter'
+    }
+    maven {
+        url 'https://maven.aliyun.com/repository/google'
+    }
+    maven {
+        url 'https://maven.aliyun.com/repository/central'
+    }
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'cn.hutool:hutool-all:5.8.24'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    // 添加OpenAI官方Java客户端依赖
+    implementation 'com.azure:azure-ai-openai:1.0.0-beta.6'
+    implementation 'junit:junit:4.13.2'
+    compileOnly 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.36'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+}
+
+// 配置Java编译选项
+compileJava {
+    options.encoding = 'UTF-8'
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+// 配置测试选项
+test {
+    useJUnitPlatform()
+}
+
+// 配置IntelliJ平台插件
+intellij {
+    version = '2024.3.2'
+    type = 'IC'
+    plugins = ['com.intellij.java']
+}
+
+patchPluginXml {
+    sinceBuild = '241.*'
+    untilBuild = '243.*'
+}
