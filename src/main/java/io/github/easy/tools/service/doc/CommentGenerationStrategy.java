@@ -19,12 +19,35 @@ public interface CommentGenerationStrategy {
     void generate(PsiFile file);
 
     /**
+     * 为文件生成注释
+     *
+     * @param file 需要生成注释的文件
+     * @param overwrite 是否覆盖已存在的注释
+     */
+    default void generate(PsiFile file, boolean overwrite) {
+        // 默认实现，忽略overwrite参数
+        this.generate(file);
+    }
+
+    /**
      * 为元素生成注释
      *
      * @param file    需要生成注释的文件
      * @param element 需要生成注释的元素
      */
     void generate(PsiFile file, PsiElement element);
+
+    /**
+     * 为元素生成注释
+     *
+     * @param file    需要生成注释的文件
+     * @param element 需要生成注释的元素
+     * @param overwrite 是否覆盖已存在的注释
+     */
+    default void generate(PsiFile file, PsiElement element, boolean overwrite) {
+        // 默认实现，忽略overwrite参数
+        this.generate(file, element);
+    }
 
     /**
      * 删除文件中的所有注释

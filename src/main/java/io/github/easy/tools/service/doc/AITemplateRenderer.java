@@ -4,13 +4,25 @@ import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import cn.hutool.json.JSON;
 import cn.hutool.json.JSONUtil;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.project.Project;
+import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiElementFactory;
 import com.intellij.psi.PsiField;
+import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.javadoc.PsiDocComment;
 import io.github.easy.tools.ui.config.DocConfigService;
 import org.apache.velocity.context.Context;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 /**
@@ -22,79 +34,10 @@ import java.util.stream.Stream;
  */
 public class AITemplateRenderer implements TemplateRenderer {
 
-    /**
-     * 类注释提示词模板
-     */
-    private static final String CLASS_PROMPT_TEMPLATE = """
-            请根据以下Java类的代码生成符合JavaDoc标准的类注释:
-            
-            类代码:
-            {code}
-            
-            要求:
-            1. 总结整个类的功能和用途
-            2. 简要描述类的主要职责
-            3. 严格按照JavaDoc格式输出
-            4. 不要包含任何解释性文字，只输出注释代码
-            5. 使用简洁明了的中文描述
-            
-            示例格式:
+    /** ERROR_DOC */
+    private static final String ERROR_DOC = """
             /**
-             * 类描述
-             *
-             * @author 作者
-             * @version 版本
-             * @since 从哪个版本开始可用
-             */
-            """;
-
-    /**
-     * 方法注释提示词模板
-     */
-    private static final String METHOD_PROMPT_TEMPLATE = """
-            请根据以下Java方法的代码生成符合JavaDoc标准的方法注释:
-            
-            方法代码:
-            {code}
-            
-            要求:
-            1. 描述方法的功能和用途
-            2. 详细说明每个参数的含义
-            3. 说明返回值的含义（如果有返回值）
-            4. 列出可能抛出的异常（如果有）
-            5. 严格按照JavaDoc格式输出
-            6. 不要包含任何解释性文字，只输出注释代码
-            7. 使用简洁明了的中文描述
-            
-            示例格式:
-            /**
-             * 方法描述
-             *
-             * @param 参数名 参数描述
-             * @return 返回值描述
-             * @throws 异常类型 异常描述
-             */
-            """;
-
-    /**
-     * 字段注释提示词模板
-     */
-    private static final String FIELD_PROMPT_TEMPLATE = """
-            请根据以下Java字段的代码生成符合JavaDoc标准的字段注释:
-            
-            字段代码:
-            {code}
-            
-            要求:
-            1. 描述字段的含义和用途
-            2. 如果字段有特殊约束或默认值，请说明
-            3. 严格按照JavaDoc格式输出
-            4. 不要包含任何解释性文字，只输出注释代码
-            5. 使用简洁明了的中文描述
-            
-            示例格式:
-            /**
-             * 字段描述
+             * 注释生成异常:{error}
              */
             """;
 
@@ -107,23 +50,15 @@ public class AITemplateRenderer implements TemplateRenderer {
             模板内容:
             {template}
             
+            参数信息：
             {context}
             
             要求:
-            1. 严格按照JavaDoc格式输出
-            2. 不要包含任何解释性文字，只输出注释代码
-            3. 确保注释内容准确反映代码意图
-            4. 包含适当的@param, @return, @throws等标签
-            5. 使用简洁明了的中文描述
-            6. 不要修改代码结构，只生成注释部分
-            
-            示例格式:
-            /**
-             * 方法描述
-             *
-             * @param 参数名 参数描述
-             * @return 返回值描述
-             */
+            1. 严格按照模板内容格式，以标准JavaDoc格式输出
+            2. 确保注释内容准确反映代码意图，如果是类则需要在描述部分对当前类的功能进行归纳，如果是方法则需要对方法内容按照顺序进行解释归纳
+            3. 如果是方法则需要包含适当的@param, @return, @throws等标签
+            4. 使用简洁明了的中文描述
+            5. 不要修改代码结构，只生成注释部分
             """;
 
     /**
@@ -157,87 +92,148 @@ public class AITemplateRenderer implements TemplateRenderer {
         // 检查是否启用AI功能
         if (config.enableAi && config.baseUrl != null && !config.baseUrl.isEmpty()) {
             try {
-                // 使用AI生成注释
-                return generateAIComment(templateContent, context, element, config);
+                // 使用AI生成注释（异步方式）
+                return this.generateAICommentAsync(templateContent, context, element, config);
             } catch (Exception e) {
-                System.err.println("AI注释生成失败: " + e.getMessage());
-                e.printStackTrace();
+                return ERROR_DOC.replace("{error}", e.getMessage());
             }
         }
 
         // 默认使用Velocity模板服务进行渲染
-        return velocityTemplateService.render(templateContent, context);
+        return """
+                /**
+                 * 请配置大模型相关信息
+                 */
+                """;
     }
 
     /**
-     * 使用OpenAI API生成注释
+     * 使用OpenAI API异步生成注释
      *
      * @param templateContent 模板内容
      * @param context         渲染上下文
      * @param element         相关的Psi元素
      * @param config          配置服务
-     * @return AI生成的注释内容
+     * @return AI生成的注释内容或默认内容
      */
-    private String generateAIComment(String templateContent, Context context, PsiElement element, DocConfigService config) {
-        try {
-            // 构建上下文信息字符串
-            StringBuilder contextInfo = new StringBuilder();
-            contextInfo.append("代码上下文信息:\n");
+    private String generateAICommentAsync(String templateContent, Context context, PsiElement element, DocConfigService config) {
+        // 在读操作中获取元素文本内容
+        String elementText = ReadAction.compute(() -> element.getText());
 
-            // 获取上下文中的所有键值对
-            Stream.of(context.getKeys()).forEach(key -> {
-                Object value = context.get(key);
-                contextInfo.append(key).append(": ").append(value).append("\n");
-            });
+        // 构建上下文信息字符串
+        StringBuilder contextInfo = new StringBuilder();
+        contextInfo.append("代码上下文信息:\n");
 
-            // 构建完整的提示词
-            String prompt = buildPrompt(templateContent, contextInfo.toString(), element);
+        // 获取上下文中的所有键值对（在读操作中执行）
+        String[] keys = ReadAction.compute(() -> context.getKeys());
+        Stream.of(keys).forEach(key -> {
+            Object value = ReadAction.compute(() -> context.get(key));
+            contextInfo.append(key).append(": ").append(value).append("\n");
+        });
 
-            // 构建请求体
-            String requestBody = buildRequestBody(config.modelName, prompt);
+        // 构建完整的提示词
+        String prompt = this.buildPrompt(templateContent, contextInfo.toString(), element, elementText);
 
-            // 发送HTTP请求
-            HttpResponse response = HttpRequest.post(config.baseUrl + "/chat/completions")
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + getApiKey(config))
-                    .body(requestBody)
-                    .timeout(300000)
-                    .execute();
+        // 创建CompletableFuture用于异步处理
+        CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
+            try {
+                // 构建请求体
+                String requestBody = this.buildRequestBody(config.modelName, prompt);
 
-            // 解析响应
-            if (response.getStatus() == 200) {
-                String responseBody = response.body();
-                return extractCommentFromResponse(responseBody);
-            } else {
-                System.err.println("调用OpenAI API失败，状态码: " + response.getStatus());
-                System.err.println("响应内容: " + response.body());
+                // 发送HTTP请求
+                HttpResponse response = HttpRequest.post(config.baseUrl + "/chat/completions")
+                        .header("Content-Type", "application/json")
+                        .header("Authorization", "Bearer " + config.apiKey)
+                        .body(requestBody)
+                        .timeout(300000)
+                        .execute();
+
+                // 解析响应
+                if (response.getStatus() == 200) {
+                    String responseBody = response.body();
+                    return this.extractCommentFromResponse(responseBody);
+                } else {
+                    // 出现异常时回退到Velocity渲染
+                    return ERROR_DOC.replace("{error}", response.body());
+                }
+            } catch (Exception e) {
                 // 出现异常时回退到Velocity渲染
-                return velocityTemplateService.render(templateContent, context);
+                Notification notification = NotificationGroupManager.getInstance()
+                        .getNotificationGroup("Easy Docs Notification Group")
+                        .createNotification("调用AI服务失败: " + e.getMessage(), NotificationType.ERROR);
+                notification.notify(element.getProject());
+                return ERROR_DOC.replace("{error}", e.getMessage());
             }
-        } catch (Exception e) {
-            System.err.println("调用OpenAI API失败: " + e.getMessage());
-            // 出现异常时回退到Velocity渲染
-            return velocityTemplateService.render(templateContent, context);
-        }
+        });
+
+        // 异步处理结果并更新注释
+        future.thenAccept(result -> {
+            if (result != null && !result.isEmpty()) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    this.updateElementComment(element, result);
+                });
+            }
+        }).exceptionally(throwable -> {
+            Notification notification = NotificationGroupManager.getInstance()
+                    .getNotificationGroup("Easy Docs Notification Group")
+                    .createNotification("处理AI注释结果时发生异常: " + throwable.getMessage(), NotificationType.ERROR);
+            notification.notify(element.getProject());
+            return null;
+        });
+
+        return """
+                /**
+                 * 正在等待大模型生成注释，生成后将会进行替换
+                 */
+                """;
     }
 
     /**
-     * 获取API密钥
+     * 更新元素的注释
      *
-     * @param config 配置服务
-     * @return API密钥
+     * @param element     目标元素
+     * @param commentText 注释文本
      */
-    private String getApiKey(DocConfigService config) {
-        String apiKey = "EMPTY"; // 默认值，对于本地部署的模型通常为空
-        if ("openai".equals(config.modelType)) {
-            // 如果是OpenAI官方服务，需要提供有效的API密钥
-            // 这里应该从安全的地方获取API密钥，例如配置文件或环境变量
-            apiKey = System.getenv("OPENAI_API_KEY");
-            if (apiKey == null) {
-                apiKey = "EMPTY"; // 回退到默认值
+    private void updateElementComment(PsiElement element, String commentText) {
+        try {
+            if (element instanceof PsiClass || element instanceof PsiMethod || element instanceof PsiField) {
+                // 获取元素所在的文件和项目
+                PsiFile file = element.getContainingFile();
+                if (file != null) {
+                    Project project = file.getProject();
+
+                    // 使用WriteCommandAction确保在正确的上下文中修改PSI
+                    WriteCommandAction.runWriteCommandAction(project, () -> {
+                        // 创建新的文档注释
+                        PsiElementFactory elementFactory = JavaPsiFacade.getElementFactory(project);
+                        PsiElement docCommentFromText = elementFactory.createDocCommentFromText(commentText);
+
+                        // 获取现有的文档注释
+                        PsiDocComment existingDocComment = null;
+                        if (element instanceof PsiClass psiClass) {
+                            existingDocComment = psiClass.getDocComment();
+                        } else if (element instanceof PsiMethod psiMethod) {
+                            existingDocComment = psiMethod.getDocComment();
+                        } else if (element instanceof PsiField psiField) {
+                            existingDocComment = psiField.getDocComment();
+                        }
+
+                        // 更新或添加注释
+                        if (existingDocComment != null) {
+                            existingDocComment.replace(docCommentFromText);
+                        } else {
+                            element.addBefore(docCommentFromText, element.getFirstChild());
+                        }
+                    });
+                }
             }
+        } catch (Exception e) {
+            // 使用IDEA的通知系统显示错误信息
+            Notification notification = NotificationGroupManager.getInstance()
+                    .getNotificationGroup("Easy Docs Notification Group")
+                    .createNotification("更新注释失败: " + e.getMessage(), NotificationType.ERROR);
+            notification.notify(element.getProject());
         }
-        return apiKey;
     }
 
     /**
@@ -272,22 +268,15 @@ public class AITemplateRenderer implements TemplateRenderer {
      * @param templateContent 模板内容
      * @param contextInfo     上下文信息
      * @param element         相关的Psi元素
+     * @param elementText     元素的文本内容
      * @return 完整的提示词
      */
-    private String buildPrompt(String templateContent, String contextInfo, PsiElement element) {
-        // 根据元素类型构建不同的提示词
-        if (element instanceof PsiClass) {
-            return CLASS_PROMPT_TEMPLATE.replace("{code}", element.getText());
-        } else if (element instanceof PsiMethod) {
-            return METHOD_PROMPT_TEMPLATE.replace("{code}", element.getText());
-        } else if (element instanceof PsiField) {
-            return FIELD_PROMPT_TEMPLATE.replace("{code}", element.getText());
-        } else {
-            // 默认提示词
-            return DEFAULT_PROMPT_TEMPLATE
-                    .replace("{template}", templateContent)
-                    .replace("{context}", contextInfo);
-        }
+    private String buildPrompt(String templateContent, String contextInfo, PsiElement element, String elementText) {
+        // 默认提示词
+        return DEFAULT_PROMPT_TEMPLATE
+                .replace("{code}", elementText)
+                .replace("{template}", templateContent)
+                .replace("{context}", contextInfo);
     }
 
     /**

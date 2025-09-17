@@ -35,11 +35,20 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="io.github.easy.tools.ui.config.DocConfigService"/>
         <applicationConfigurable
-            parentId="other"
-            instance="io.github.easy.tools.ui.config.DocConfig"
-            id="io.github.easy.tools.ui.config.TemplateConfig"
-            displayName="Easy Tools"/>
+                parentId="other"
+                instance="io.github.easy.tools.ui.config.DocConfig"
+                id="io.github.easy.tools.ui.config.TemplateConfig"
+                displayName="Easy Tools"/>
+        <applicationService serviceImplementation="io.github.easy.tools.action.doc.listener.FileSaveListenerManager"/>
+        <notificationGroup id="Easy Docs Notification Group"
+                           displayType="BALLOON"
+                           key="notification.group.name"/>
     </extensions>
+
+    <applicationListeners>
+        <listener class="io.github.easy.tools.action.doc.listener.FileSaveListenerManager"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
 
     <actions>
         <group id="JavaDocMenus" popup="true" description="Java Doc" text="Java Doc">

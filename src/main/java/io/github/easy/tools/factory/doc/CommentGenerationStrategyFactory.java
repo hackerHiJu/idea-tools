@@ -15,27 +15,13 @@ import io.github.easy.tools.service.doc.JavaCommentGenerationStrategy;
 public class CommentGenerationStrategyFactory {
 
     /**
-     * 单例实例
-     */
-    private static final CommentGenerationStrategyFactory INSTANCE = new CommentGenerationStrategyFactory();
-
-    /**
      * 私有构造函数
      * <p>
      * 防止外部直接实例化该类，确保单例模式的正确实现。
      * </p>
      */
-    private CommentGenerationStrategyFactory() {
+    public CommentGenerationStrategyFactory() {
         // 私有构造函数防止外部实例化
-    }
-
-    /**
-     * 获取工厂实例
-     *
-     * @return 注释生成策略工厂的单例实例
-     */
-    public static CommentGenerationStrategyFactory getInstance() {
-        return INSTANCE;
     }
 
     /**

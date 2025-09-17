@@ -1,11 +1,14 @@
 package io.github.easy.tools.action.doc.actions;
 
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.javadoc.PsiDocComment;
 
 import java.util.List;
@@ -81,5 +84,33 @@ public abstract class AbstractEasyDocAction extends AnAction {
         }
         return false;
     }
-
+    
+    /**
+     * 获取光标位置的元素
+     *
+     * @param file 文件
+     * @param editor 编辑器
+     * @return 光标位置的元素
+     */
+    protected PsiElement getElementAtCaret(PsiFile file, Editor editor) {
+        if (editor == null) {
+            return file;
+        }
+        
+        int offset = editor.getCaretModel().getOffset();
+        PsiElement element = file.findElementAt(offset);
+        
+        // 跳过空白字符
+        while (element instanceof PsiWhiteSpace) {
+            element = element.getNextSibling();
+        }
+        
+        // 如果找不到元素，返回文件本身
+        if (element == null) {
+            return file;
+        }
+        
+        // 查找最近的可注释元素
+        return this.findFirstElementFromCaret(file, offset);
+    }
 }

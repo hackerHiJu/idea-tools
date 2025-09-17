@@ -26,7 +26,6 @@ import java.util.List;
 )
 public class DocConfigService implements PersistentStateComponent<DocConfigService> {
 
-    // AI相关配置
     /**
      * 是否启用AI功能
      */
@@ -107,6 +106,10 @@ public class DocConfigService implements PersistentStateComponent<DocConfigServi
      */
     public List<TemplateParameter> customParameters = new LinkedList<>();
 
+    /**
+     * 是否启用保存监听器
+     */
+    public boolean saveListener = false;
 
     /**
      * 获取基础参数列表

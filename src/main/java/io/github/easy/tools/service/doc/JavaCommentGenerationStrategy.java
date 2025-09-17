@@ -1,5 +1,6 @@
 package io.github.easy.tools.service.doc;
 
+import cn.hutool.core.util.StrUtil;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -22,12 +23,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Java 注释生成策略，使用 Velocity 模板引擎生成注释。
+ * Java注释生成策略实现类
  * <p>
- * 该类实现了CommentGenerationStrategy接口，提供了Java文件注释生成和删除的具体实现。
- * 支持类、方法和字段三种元素类型的注释处理，使用策略模式和工厂模式来管理不同元素类型的处理器。
+ * 该类实现了CommentGenerationStrategy接口，提供了Java文件注释生成的具体实现。
+ * 支持类、方法、字段等元素的文档注释生成和删除功能。
  * </p>
  */
 public class JavaCommentGenerationStrategy implements CommentGenerationStrategy {
@@ -38,74 +40,129 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
     private static final Map<String, DocHandler> docHandlerMap = new HashMap<>();
 
     /**
-     * 静态初始化块，初始化文档处理器映射表
+     * 注释比较器映射
+     */
+    private static final Map<String, DocCommentComparator> COMMENT_COMPARATOR_MAP = new ConcurrentHashMap<>();
+
+    /**
+     * 静态初始化块，初始化注释比较器映射
      */
     static {
-        docHandlerMap.put("class", new ClassDocHandler());
-        docHandlerMap.put("method", new MethodDocHandler());
-        docHandlerMap.put("field", new FieldDocHandler());
+        COMMENT_COMPARATOR_MAP.put("JAVA", new JavaDocCommentComparator());
+    }
+
+    /**
+     * 获取指定类型的文档处理器
+     *
+     * @param type 元素类型
+     * @return 对应的文档处理器
+     */
+    private DocHandler getDocHandler(String type) {
+        return docHandlerMap.computeIfAbsent(type, k -> {
+            switch (k) {
+                case "class":
+                    return new ClassDocHandler();
+                case "method":
+                    return new MethodDocHandler();
+                case "field":
+                    return new FieldDocHandler();
+                default:
+                    throw new IllegalArgumentException("Unsupported element type: " + k);
+            }
+        });
     }
 
     /**
      * 为文件生成注释
-     * <p>
-     * 遍历文件中的所有元素并为可注释的元素生成注释
-     * </p>
      *
      * @param file 需要生成注释的文件
      */
     @Override
     public void generate(PsiFile file) {
-        // 遍历文件中的所有元素并生成注释
-        this.generateCommentsRecursively(file, file);
+        WriteCommandAction.runWriteCommandAction(file.getProject(), () -> {
+            this.generateCommentsRecursively(file, true);
+        });
     }
 
     /**
-     * 递归遍历元素并生成注释
+     * 为文件生成注释
      *
-     * @param file    当前文件
-     * @param element 当前元素
+     * @param file      需要生成注释的文件
+     * @param overwrite 是否覆盖已存在的注释
      */
-    private void generateCommentsRecursively(PsiFile file, PsiElement element) {
-        // 为当前元素生成注释（如果是可注释的元素）
-        if (element instanceof PsiClass ||
-                element instanceof PsiMethod ||
-                element instanceof PsiField) {
-            this.generate(file, element);
-        }
-
-        // 递归处理所有子元素
-        for (PsiElement child : element.getChildren()) {
-            this.generateCommentsRecursively(file, child);
-        }
+    @Override
+    public void generate(PsiFile file, boolean overwrite) {
+        WriteCommandAction.runWriteCommandAction(file.getProject(), () -> {
+            this.generateCommentsRecursively(file, overwrite);
+        });
     }
 
     /**
      * 为元素生成注释
-     * <p>
-     * 根据元素类型选择合适的处理器生成注释内容，并写入到文件中
-     * </p>
      *
      * @param file    需要生成注释的文件
      * @param element 需要生成注释的元素
      */
     @Override
     public void generate(PsiFile file, PsiElement element) {
+        this.generate(file, element, true);
+    }
+
+    /**
+     * 为元素生成注释
+     *
+     * @param file      需要生成注释的文件
+     * @param element   需要生成注释的元素
+     * @param overwrite 是否覆盖已存在的注释
+     */
+    @Override
+    public void generate(PsiFile file, PsiElement element, boolean overwrite) {
         String doc = "";
         DocHandler handler = null;
         if (element instanceof PsiClass) {
-            handler = docHandlerMap.get("class");
+            handler = this.getDocHandler("class");
         } else if (element instanceof PsiMethod) {
-            handler = docHandlerMap.get("method");
+            handler = this.getDocHandler("method");
         } else if (element instanceof PsiField) {
-            handler = docHandlerMap.get("field");
+            handler = this.getDocHandler("field");
         }
 
         if (handler != null) {
             doc = handler.generateDoc(file, element);
         }
+        if (StrUtil.isBlank(doc)) {
+            return;
+        }
+
         Project project = file.getProject();
-        this.writeDoc(project, element, doc);
+        PsiElementFactory elementFactory = JavaPsiFacade.getElementFactory(project);
+        PsiElement docCommentFromText = elementFactory.createDocCommentFromText(doc);
+
+        // 获取注释比较器
+        DocCommentComparator comparator = COMMENT_COMPARATOR_MAP.get(file.getFileType().getName());
+        if (comparator != null && comparator.hasComment(element)) {
+            docCommentFromText = comparator.mergeComments(element, docCommentFromText);
+        }
+
+        this.writeDoc(project, element, docCommentFromText);
+    }
+
+    /**
+     * 递归生成文件中所有元素的注释
+     *
+     * @param element   需要生成注释的元素
+     * @param overwrite 是否覆盖已存在的注释
+     */
+    private void generateCommentsRecursively(PsiElement element, boolean overwrite) {
+        // 为当前元素生成注释
+        this.generate(element.getContainingFile(), element, overwrite);
+
+        // 递归处理所有子元素
+        for (PsiElement child : element.getChildren()) {
+            if (child instanceof PsiClass || child instanceof PsiMethod || child instanceof PsiField) {
+                this.generateCommentsRecursively(child, overwrite);
+            }
+        }
     }
 
     /**
@@ -115,17 +172,15 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
      * @param element    目标元素
      * @param docContent 注释内容
      */
-    private void writeDoc(Project project, PsiElement element, String docContent) {
+    private void writeDoc(Project project, PsiElement element, PsiElement docContent) {
         WriteCommandAction.runWriteCommandAction(project, () -> {
             try {
-                PsiElementFactory elementFactory = JavaPsiFacade.getElementFactory(project);
                 if (element instanceof PsiJavaDocumentedElement psiJavaDocumentedElement) {
-                    PsiDocComment docCommentFromText = elementFactory.createDocCommentFromText(docContent);
                     PsiDocComment docComment = psiJavaDocumentedElement.getDocComment();
                     if (docComment != null) {
-                        docComment.replace(docCommentFromText);
+                        docComment.replace(docContent);
                     } else {
-                        psiJavaDocumentedElement.addBefore(docCommentFromText, psiJavaDocumentedElement.getFirstChild());
+                        psiJavaDocumentedElement.addBefore(docContent, psiJavaDocumentedElement.getFirstChild());
                     }
                 }
             } catch (Exception e) {
@@ -224,6 +279,14 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
          * 模板渲染服务实例，用于渲染模板
          */
         protected final TemplateRenderer templateRenderer = TemplateRendererFactory.getTemplateRenderer();
+
+        /**
+         * Abstract doc handler
+         *
+         * @since y.y.y
+         */
+        protected AbstractDocHandler() {
+        }
 
         /**
          * 生成元素的文档
@@ -409,6 +472,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
          */
         @Override
         protected String doGenerateDoc(PsiFile file, PsiClass element, Context context) {
+            // 按需获取DocConfigService实例，避免在类初始化时就访问服务
             DocConfigService cfg = DocConfigService.getInstance();
             return this.templateRenderer.render(cfg.classTemplate, context, element);
         }
@@ -441,6 +505,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
          */
         @Override
         protected String doGenerateDoc(PsiFile file, PsiMethod element, Context context) {
+            // 按需获取DocConfigService实例，避免在类初始化时就访问服务
             DocConfigService cfg = DocConfigService.getInstance();
             return this.templateRenderer.render(cfg.methodTemplate, context, element);
         }
@@ -492,6 +557,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
          */
         @Override
         protected String doGenerateDoc(PsiFile file, PsiField element, Context context) {
+            // 按需获取DocConfigService实例，避免在类初始化时就访问服务
             DocConfigService cfg = DocConfigService.getInstance();
             return this.templateRenderer.render(cfg.fieldTemplate, context, element);
         }

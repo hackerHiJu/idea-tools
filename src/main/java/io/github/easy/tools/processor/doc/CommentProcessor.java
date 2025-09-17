@@ -16,16 +16,18 @@ public interface CommentProcessor {
      * 生成整个文件的注释
      *
      * @param file 需要生成注释的文件
+     * @param overwrite 是否覆盖已存在的注释
      */
-    void generateFileComment(PsiFile file);
+    void generateFileComment(PsiFile file, boolean overwrite);
 
     /**
      * 生成指定元素的注释
      *
      * @param file    需要生成注释的文件
      * @param element 需要生成注释的元素
+     * @param overwrite 是否覆盖已存在的注释
      */
-    void generateElementComment(PsiFile file, PsiElement element);
+    void generateElementComment(PsiFile file, PsiElement element, boolean overwrite);
 
     /**
      * 删除整个文件的注释
@@ -42,4 +44,22 @@ public interface CommentProcessor {
      */
     void removeElementComment(PsiFile file, PsiElement element);
 
+    /**
+     * 生成整个文件的注释（默认覆盖）
+     *
+     * @param file 需要生成注释的文件
+     */
+    default void generateFileComment(PsiFile file) {
+        this.generateFileComment(file, true);
+    }
+
+    /**
+     * 生成指定元素的注释（默认覆盖）
+     *
+     * @param file    需要生成注释的文件
+     * @param element 需要生成注释的元素
+     */
+    default void generateElementComment(PsiFile file, PsiElement element) {
+        this.generateElementComment(file, element, true);
+    }
 }
