@@ -10,8 +10,12 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiWhiteSpace;
 import com.intellij.psi.javadoc.PsiDocComment;
+import io.github.easy.tools.processor.doc.CommentProcessor;
+import io.github.easy.tools.processor.doc.JavaCommentProcessor;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 所有动作类的基类，封装了通用逻辑
@@ -23,12 +27,34 @@ import java.util.List;
 public abstract class AbstractEasyDocAction extends AnAction {
 
     /**
+     * 注释处理器映射
+     */
+    private static final Map<String, CommentProcessor> PROCESSOR_MAP = new HashMap<>();
+
+    static {
+        PROCESSOR_MAP.put("JAVA", new JavaCommentProcessor());
+    }
+
+    /**
      * Java元素类型列表，包括文档注释、类、方法和字段
      */
     private static final List<Class<?>> JAVA_ELEMENTS = List.of(PsiDocComment.class,
             PsiClass.class,
             PsiMethod.class,
             PsiField.class);
+
+    /**
+     * 根据文件类型获取对应的注释处理器
+     *
+     * @param file 文件
+     * @return 对应的注释处理器
+     */
+    protected CommentProcessor getProcessor(PsiFile file) {
+        if (file == null) {
+            return null;
+        }
+        return PROCESSOR_MAP.get(file.getFileType().getName());
+    }
 
     /**
      * 从光标位置开始向下查找第一个Java元素或文档注释

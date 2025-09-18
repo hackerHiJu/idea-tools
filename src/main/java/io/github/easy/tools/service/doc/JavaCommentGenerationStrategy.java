@@ -276,9 +276,14 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
     private static abstract class AbstractDocHandler<P extends PsiElement> implements DocHandler<P> {
 
         /**
-         * 模板渲染服务实例，用于渲染模板
+         * 获取模板渲染服务实例，用于渲染模板
+         * 每次调用都会获取最新的渲染器实例，以确保配置变更后能使用正确的渲染器
+         *
+         * @return 模板渲染器实例
          */
-        protected final TemplateRenderer templateRenderer = TemplateRendererFactory.getTemplateRenderer();
+        protected TemplateRenderer getTemplateRenderer() {
+            return TemplateRendererFactory.getTemplateRenderer();
+        }
 
         /**
          * Abstract doc handler
@@ -474,7 +479,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
         protected String doGenerateDoc(PsiFile file, PsiClass element, Context context) {
             // 按需获取DocConfigService实例，避免在类初始化时就访问服务
             DocConfigService cfg = DocConfigService.getInstance();
-            return this.templateRenderer.render(cfg.classTemplate, context, element);
+            return this.getTemplateRenderer().render(cfg.classTemplate, context, element);
         }
 
         /**
@@ -485,8 +490,15 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
          */
         @Override
         protected void addElementSpecificParameters(VelocityContext context, PsiClass element) {
-            context.put("description", element.getName());
-            context.put("since", "1.0.0");
+            String description = element.getName();
+            String since = DocConfigService.getInstance().getBaseParameters().stream()
+                    .filter(param -> DocConfigService.PARAM_SINCE.equals(param.getName()))
+                    .map(param -> (String) param.getValue())
+                    .findFirst()
+                    .orElse("1.0.0");
+
+            context.put(DocConfigService.PARAM_DESCRIPTION, description);
+            context.put(DocConfigService.PARAM_SINCE, since);
         }
     }
 
@@ -507,7 +519,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
         protected String doGenerateDoc(PsiFile file, PsiMethod element, Context context) {
             // 按需获取DocConfigService实例，避免在类初始化时就访问服务
             DocConfigService cfg = DocConfigService.getInstance();
-            return this.templateRenderer.render(cfg.methodTemplate, context, element);
+            return this.getTemplateRenderer().render(cfg.methodTemplate, context, element);
         }
 
         /**
@@ -518,27 +530,27 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
          */
         @Override
         protected void addElementSpecificParameters(VelocityContext context, PsiMethod element) {
-            context.put("description", element.getName() + " method");
+            context.put(DocConfigService.PARAM_DESCRIPTION, element.getName() + " method");
             // 添加方法返回值类型
             if (element.getReturnType() != null) {
-                context.put("returnType", element.getReturnType().getPresentableText());
+                context.put(DocConfigService.PARAM_RETURN_TYPE, element.getReturnType().getPresentableText());
             }
             // 添加方法参数信息
             List<Map<String, String>> parameters = new ArrayList<>();
             for (PsiParameter parameter : element.getParameterList().getParameters()) {
                 Map<String, String> param = new HashMap<>();
-                param.put("name", parameter.getName());
+                param.put(DocConfigService.PARAM_DESCRIPTION, parameter.getName());
                 param.put("description", parameter.getType().getPresentableText());
                 parameters.add(param);
             }
-            context.put("parameters", parameters);
+            context.put(DocConfigService.PARAM_PARAMETERS, parameters);
 
             // 添加方法抛出的异常信息
             List<String> exceptions = new ArrayList<>();
             for (com.intellij.psi.PsiClassType exceptionType : element.getThrowsList().getReferencedTypes()) {
                 exceptions.add(exceptionType.getPresentableText());
             }
-            context.put("exceptions", exceptions);
+            context.put(DocConfigService.PARAM_EXCEPTIONS, exceptions);
         }
     }
 
@@ -559,7 +571,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
         protected String doGenerateDoc(PsiFile file, PsiField element, Context context) {
             // 按需获取DocConfigService实例，避免在类初始化时就访问服务
             DocConfigService cfg = DocConfigService.getInstance();
-            return this.templateRenderer.render(cfg.fieldTemplate, context, element);
+            return this.getTemplateRenderer().render(cfg.fieldTemplate, context, element);
         }
 
         /**
@@ -570,7 +582,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
          */
         @Override
         protected void addElementSpecificParameters(VelocityContext context, PsiField element) {
-            context.put("fieldName", element.getName());
+            context.put(DocConfigService.PARAM_FIELD_NAME, element.getName());
         }
     }
 }

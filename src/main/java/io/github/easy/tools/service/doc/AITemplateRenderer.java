@@ -1,12 +1,10 @@
 package io.github.easy.tools.service.doc;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import cn.hutool.json.JSON;
 import cn.hutool.json.JSONUtil;
-import com.intellij.notification.Notification;
-import com.intellij.notification.NotificationGroupManager;
-import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
@@ -20,10 +18,12 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.javadoc.PsiDocComment;
 import io.github.easy.tools.ui.config.DocConfigService;
+import io.github.easy.tools.utils.NotificationUtil;
 import org.apache.velocity.context.Context;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
@@ -42,14 +42,8 @@ import java.util.stream.Stream;
  */
 public class AITemplateRenderer implements TemplateRenderer {
 
-    /** ERROR_DOC */
-    private static final String ERROR_DOC = """
-            /**
-             * 注释生成异常:{error}
-             */
-            """;
     /** Prompts */
-    private final Map<String, AIDocProcessor> prompts = new HashMap<>();
+    private final Map<String, AIDocProcessor> aiDocProcessorHashMap = new HashMap<>();
 
     /**
      * Ai template renderer
@@ -57,7 +51,7 @@ public class AITemplateRenderer implements TemplateRenderer {
      * @since y.y.y
      */
     public AITemplateRenderer() {
-        this.prompts.put("JAVA", new JavaAiDocProcessor());
+        this.aiDocProcessorHashMap.put("JAVA", new JavaAiDocProcessor());
     }
 
     /**
@@ -83,16 +77,13 @@ public class AITemplateRenderer implements TemplateRenderer {
                 // 使用AI生成注释（异步方式）
                 return this.generateAICommentAsync(templateContent, context, element, config);
             } catch (Exception e) {
-                return ERROR_DOC.replace("{error}", e.getMessage());
+                // 让处理器处理错误格式
+                return this.getPlaceholder(element, "注释生成异常:" + e.getMessage());
             }
         }
 
-        // 默认使用Velocity模板服务进行渲染
-        return """
-                /**
-                 * 请配置大模型相关信息
-                 */
-                """;
+        // 让处理器处理默认格式
+        return this.getPlaceholder(element, "请配置大模型相关信息");
     }
 
     /**
@@ -121,6 +112,9 @@ public class AITemplateRenderer implements TemplateRenderer {
 
         // 构建完整的提示词
         String prompt = this.buildPrompt(templateContent, contextInfo.toString(), element, elementText);
+        if (StrUtil.isBlank(prompt)) {
+            return "不支持的文件类型";
+        }
 
         // 创建CompletableFuture用于异步处理
         CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
@@ -138,19 +132,16 @@ public class AITemplateRenderer implements TemplateRenderer {
 
                 // 解析响应
                 if (response.getStatus() == 200) {
-                    String responseBody = response.body();
-                    return this.extractCommentFromResponse(responseBody);
+                    return response.body();
                 } else {
-                    // 出现异常时回退到Velocity渲染
-                    return ERROR_DOC.replace("{error}", response.body());
+                    // 出现异常时让处理器处理错误格式
+                    return this.getPlaceholder(element, "注释生成异常:" + response.body());
                 }
             } catch (Exception e) {
-                // 出现异常时回退到Velocity渲染
-                Notification notification = NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Easy Docs Notification Group")
-                        .createNotification("调用AI服务失败: " + e.getMessage(), NotificationType.ERROR);
-                notification.notify(element.getProject());
-                return ERROR_DOC.replace("{error}", e.getMessage());
+                // 出现异常时使用通知系统显示错误
+                NotificationUtil.showError(element.getProject(), "调用AI服务失败: " + e.getMessage());
+                // 让处理器处理错误格式
+                return this.getPlaceholder(element, "注释生成异常:" + e.getMessage());
             }
         });
 
@@ -162,40 +153,30 @@ public class AITemplateRenderer implements TemplateRenderer {
                 });
             }
         }).exceptionally(throwable -> {
-            Notification notification = NotificationGroupManager.getInstance()
-                    .getNotificationGroup("Easy Docs Notification Group")
-                    .createNotification("处理AI注释结果时发生异常: " + throwable.getMessage(), NotificationType.ERROR);
-            notification.notify(element.getProject());
+            NotificationUtil.showError(element.getProject(), "处理AI注释结果时发生异常: " + throwable.getMessage());
             return null;
         });
 
-        return """
-                /**
-                 * 正在等待大模型生成注释，生成后将会进行替换
-                 */
-                """;
+        // 返回等待处理的占位符
+        return this.getPlaceholder(element, "正在等待大模型生成注释，生成后将会进行替换");
     }
 
     /**
      * 更新元素的注释
      *
-     * @param element     目标元素
-     * @param commentText 注释文本
+     * @param element      目标元素
+     * @param responseBody 响应体
      * @since y.y.y
      */
-    private void updateElementComment(PsiElement element, String commentText) {
+    private void updateElementComment(PsiElement element, String responseBody) {
         PsiFile file = element.getContainingFile();
         if (file != null) {
             String fileType = file.getFileType().getName();
-            AIDocProcessor aiDocProcessor = this.prompts.get(fileType);
-            if (aiDocProcessor == null) {
-                Notification notification = NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Easy Docs Notification Group")
-                        .createNotification("暂不支持当前类型[%s]进行注释生成".formatted(fileType), NotificationType.INFORMATION);
-                notification.notify(element.getProject());
-                return;
-            }
-            aiDocProcessor.updateDoc(element, commentText);
+            Optional.ofNullable(this.aiDocProcessorHashMap.get(fileType))
+                    .ifPresent(aiDocProcessor -> {
+                        String doc = aiDocProcessor.extractCommentFromResponse(responseBody);
+                        aiDocProcessor.updateDoc(element, doc);
+                    });
         }
     }
 
@@ -241,12 +222,9 @@ public class AITemplateRenderer implements TemplateRenderer {
         PsiFile file = element.getContainingFile();
         if (file != null) {
             String fileType = file.getFileType().getName();
-            AIDocProcessor aiDocProcessor = this.prompts.get(fileType);
+            AIDocProcessor aiDocProcessor = this.aiDocProcessorHashMap.get(fileType);
             if (aiDocProcessor == null) {
-                Notification notification = NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Easy Docs Notification Group")
-                        .createNotification("暂不支持当前类型[%s]进行注释生成".formatted(fileType), NotificationType.INFORMATION);
-                notification.notify(element.getProject());
+                NotificationUtil.showInfo(element.getProject(), "暂不支持当前类型[%s]进行注释生成".formatted(fileType));
                 throw new RuntimeException("暂不支持当前类型[%s]进行注释生成".formatted(fileType));
             }
             return aiDocProcessor.getPromptByType(element)
@@ -258,37 +236,20 @@ public class AITemplateRenderer implements TemplateRenderer {
     }
 
     /**
-     * 从AI响应中提取注释内容
+     * 获取占位符格式（包括错误和默认情况）
      *
-     * @param responseBody 响应体
-     * @return 提取的注释 string
-     * @since y.y.y
+     * @param element 相关的Psi元素
+     * @param message 消息内容
+     * @return 占位符格式 string
      */
-    private String extractCommentFromResponse(String responseBody) {
-        try {
-            // 解析JSON响应
-            JSON responseJson = JSONUtil.parse(responseBody);
-            String content = responseJson.getByPath("choices[0].message.content", String.class);
-
-            // 尝试从代码块中提取注释
-            if (content != null && content.contains("```")) {
-                int start = content.indexOf("```");
-                int end = content.lastIndexOf("```");
-                if (start >= 0 && end > start) {
-                    String codeBlock = content.substring(start + 3, end).trim();
-                    // 如果代码块以java开头，则移除
-                    if (codeBlock.startsWith("java")) {
-                        codeBlock = codeBlock.substring(4).trim();
-                    }
-                    return codeBlock;
-                }
-            }
-
-            // 如果没有代码块，直接返回响应内容
-            return content != null ? content : "";
-        } catch (Exception e) {
-            return ERROR_DOC.replace("{error}", e.getMessage());
+    private String getPlaceholder(PsiElement element, String message) {
+        PsiFile file = element.getContainingFile();
+        if (file != null) {
+            String fileType = file.getFileType().getName();
+            Optional.ofNullable(this.aiDocProcessorHashMap.get(fileType))
+                    .ifPresent(aiDocProcessor -> aiDocProcessor.getPlaceholderDoc(message));
         }
+        return "";
     }
 
 
@@ -323,6 +284,21 @@ public class AITemplateRenderer implements TemplateRenderer {
          */
         void updateDoc(PsiElement element, String commentText);
 
+        /**
+         * 从AI响应中提取标准注释内容
+         *
+         * @param responseContent AI响应内容
+         * @return 提取的标准注释
+         */
+        String extractCommentFromResponse(String responseContent);
+
+        /**
+         * 获取占位符注释（包括错误和默认情况）
+         *
+         * @param message 消息内容（错误信息或默认提示）
+         * @return 占位符注释
+         */
+        String getPlaceholderDoc(String message);
     }
 
     /**
@@ -459,11 +435,66 @@ public class AITemplateRenderer implements TemplateRenderer {
                 }
             } catch (Exception e) {
                 // 使用IDEA的通知系统显示错误信息
-                Notification notification = NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Easy Docs Notification Group")
-                        .createNotification("更新注释失败: " + e.getMessage(), NotificationType.ERROR);
-                notification.notify(element.getProject());
+                NotificationUtil.showError(element.getProject(), "更新注释失败: " + e.getMessage());
             }
+        }
+
+        /**
+         * 从AI响应中提取标准JavaDoc注释内容
+         *
+         * @param responseContent AI响应内容
+         * @return 提取的标准JavaDoc注释
+         */
+        @Override
+        public String extractCommentFromResponse(String responseContent) {
+            if (responseContent == null || responseContent.isEmpty()) {
+                return "";
+            }
+
+            // 尝试从代码块中提取注释
+            if (responseContent.contains("```")) {
+                int start = responseContent.indexOf("```");
+                int end = responseContent.lastIndexOf("```");
+                if (start >= 0 && end > start) {
+                    String codeBlock = responseContent.substring(start + 3, end).trim();
+                    // 如果代码块以java开头，则移除
+                    if (codeBlock.startsWith("java")) {
+                        codeBlock = codeBlock.substring(4).trim();
+                    }
+                    responseContent = codeBlock;
+                }
+            }
+
+            // 按照JavaDoc标准提取注释部分
+            // 查找 /** 和 */ 之间的内容
+            int docStart = responseContent.indexOf("/**");
+            int docEnd = responseContent.indexOf("*/", docStart);
+
+            if (docStart >= 0 && docEnd > docStart) {
+                // 提取完整的JavaDoc注释
+                return responseContent.substring(docStart, docEnd + 2);
+            } else if (docStart >= 0) {
+                // 只找到了开始标记，提取从开始到字符串末尾的部分
+                return responseContent.substring(docStart);
+            }
+
+            // 如果没有找到标准JavaDoc格式，返回原始内容
+            return responseContent;
+        }
+
+        /**
+         * 获取占位符注释（包括错误和默认情况）
+         *
+         * @param message 消息内容（错误信息或默认提示）
+         * @return 占位符注释
+         */
+        @Override
+        public String getPlaceholderDoc(String message) {
+            return """
+                    /**
+                     * %s
+                     */
+                    """.formatted(message);
         }
     }
 }

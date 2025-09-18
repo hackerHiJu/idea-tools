@@ -272,14 +272,22 @@ public class DocConfig implements Configurable {
         this.classTemplate.setText(config.classTemplate);
         this.methodTemplate.setText(config.methodTemplate);
         this.fieldTemplate.setText(config.fieldTemplate);
-        List<TemplateParameter> baseParameters = config.getBaseParameters();
-        StringJoiner joiner = new StringJoiner("\n");
-        for (TemplateParameter parameter : baseParameters) {
-            String description = parameter.getDescription();
-            String format = String.format("%s(%s)", parameter.getName(), description);
-            joiner.add(format + "=" + parameter.getValue());
-        }
-        this.varDesc.setText(joiner.toString());
+        
+        // 构建内置参数说明文本
+        StringBuilder varDescText = new StringBuilder();
+        varDescText.append("类模板可用参数:\n");
+        config.getClassTemplateParameters().forEach((name, desc) -> 
+            varDescText.append("  ").append(name).append(" - ").append(desc).append("\n"));
+        
+        varDescText.append("\n方法模板可用参数:\n");
+        config.getMethodTemplateParameters().forEach((name, desc) -> 
+            varDescText.append("  ").append(name).append(" - ").append(desc).append("\n"));
+        
+        varDescText.append("\n字段模板可用参数:\n");
+        config.getFieldTemplateParameters().forEach((name, desc) -> 
+            varDescText.append("  ").append(name).append(" - ").append(desc).append("\n"));
+        
+        this.varDesc.setText(varDescText.toString());
         this.customVar.setText(config.customVar);
         this.saveListener.setSelected(config.saveListener);
         this.repaint();

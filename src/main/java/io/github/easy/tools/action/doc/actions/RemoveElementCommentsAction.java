@@ -6,7 +6,7 @@ import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import io.github.easy.tools.processor.doc.JavaCommentProcessor;
+import io.github.easy.tools.processor.doc.CommentProcessor;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -17,11 +17,6 @@ import org.jetbrains.annotations.NotNull;
  * </p>
  */
 public class RemoveElementCommentsAction extends AbstractEasyDocAction {
-
-    /**
-     * Java注释处理器实例，用于执行实际的注释删除操作
-     */
-    private final JavaCommentProcessor processor = new JavaCommentProcessor();
 
     /**
      * 执行动作事件，删除当前元素的注释
@@ -40,6 +35,10 @@ public class RemoveElementCommentsAction extends AbstractEasyDocAction {
                 element = this.findFirstElementFromCaret(file, offset);
             }
         }
-        this.processor.removeElementComment(file, element);
+
+        CommentProcessor processor = this.getProcessor(file);
+        if (processor != null && file != null && element != null) {
+            processor.removeElementComment(file, element);
+        }
     }
 }

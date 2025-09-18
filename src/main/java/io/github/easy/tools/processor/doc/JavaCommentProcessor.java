@@ -106,7 +106,7 @@ public class JavaCommentProcessor implements CommentProcessor {
         // 1. 获取合适的生成策略（如Java）
         CommentGenerationStrategy strategy = this.commentGenerationStrategyFactory.getStrategy(file);
         // 2. 执行生成逻辑
-        if (strategy instanceof io.github.easy.tools.service.doc.JavaCommentGenerationStrategy javaStrategy) {
+        if (strategy instanceof JavaCommentGenerationStrategy javaStrategy) {
             javaStrategy.generate(file, element, overwrite);
         } else {
             strategy.generate(file, element);

@@ -5,7 +5,7 @@ import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import io.github.easy.tools.processor.doc.JavaCommentProcessor;
+import io.github.easy.tools.processor.doc.CommentProcessor;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -16,11 +16,6 @@ import org.jetbrains.annotations.NotNull;
  * </p>
  */
 public class GenerateElementCommentAction extends AbstractEasyDocAction {
-
-    /**
-     * Java注释处理器实例，用于执行实际的注释生成操作
-     */
-    private final JavaCommentProcessor processor = new JavaCommentProcessor();
 
     /**
      * 执行动作事件，为当前元素生成注释
@@ -41,8 +36,9 @@ public class GenerateElementCommentAction extends AbstractEasyDocAction {
             }
         }
 
-        if (file != null && element != null) {
-            this.processor.generateElementComment(file, element);
+        CommentProcessor processor = this.getProcessor(file);
+        if (processor != null && file != null && element != null) {
+            processor.generateElementComment(file, element);
         }
     }
 }

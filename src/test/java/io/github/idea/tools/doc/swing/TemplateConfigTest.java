@@ -1,6 +1,7 @@
 package io.github.idea.tools.doc.swing;
 
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import javax.swing.BorderFactory;
 import javax.swing.JCheckBox;
@@ -26,22 +27,22 @@ public class TemplateConfigTest extends JPanel { // 确保继承 JPanel
     private JTextArea customVariables;
 
     public TemplateConfigTest() {
-        setLayout(new BorderLayout()); // 设置布局管理器
+        this.setLayout(new BorderLayout()); // 设置布局管理器
 
         // AI Configuration Section
         JPanel aiConfigPanel = new JPanel(new GridLayout(4, 2));
-        enableAI = new JCheckBox("开启AI");
-        modelType = new JComboBox<>(new String[]{"openai"});
-        modelAddress = new JTextField();
-        modelName = new JTextField();
+        this.enableAI = new JCheckBox("开启AI");
+        this.modelType = new JComboBox<>(new String[]{"openai"});
+        this.modelAddress = new JTextField();
+        this.modelName = new JTextField();
 
-        aiConfigPanel.add(enableAI);
+        aiConfigPanel.add(this.enableAI);
         aiConfigPanel.add(new JLabel("模型类型"));
-        aiConfigPanel.add(modelType);
+        aiConfigPanel.add(this.modelType);
         aiConfigPanel.add(new JLabel("模型地址"));
-        aiConfigPanel.add(modelAddress);
+        aiConfigPanel.add(this.modelAddress);
         aiConfigPanel.add(new JLabel("模型名称"));
-        aiConfigPanel.add(modelName);
+        aiConfigPanel.add(this.modelName);
 
         // Annotation Template Configuration Section
         JPanel annotationConfigPanel = new JPanel(new BorderLayout());
@@ -51,12 +52,12 @@ public class TemplateConfigTest extends JPanel { // 确保继承 JPanel
         annotationLabels.add(new JLabel("字段模板"));
 
         JPanel annotationAreas = new JPanel(new GridLayout(3, 1));
-        classConfig = new JTextArea(5, 20);
-        methodTemplate = new JTextArea(5, 20);
-        fieldTemplate = new JTextArea(5, 20);
-        annotationAreas.add(classConfig);
-        annotationAreas.add(methodTemplate);
-        annotationAreas.add(fieldTemplate);
+        this.classConfig = new JTextArea(5, 20);
+        this.methodTemplate = new JTextArea(5, 20);
+        this.fieldTemplate = new JTextArea(5, 20);
+        annotationAreas.add(this.classConfig);
+        annotationAreas.add(this.methodTemplate);
+        annotationAreas.add(this.fieldTemplate);
 
         annotationConfigPanel.add(annotationLabels, BorderLayout.WEST);
         annotationConfigPanel.add(annotationAreas, BorderLayout.CENTER);
@@ -64,31 +65,31 @@ public class TemplateConfigTest extends JPanel { // 确保继承 JPanel
         // Internal Variables Section
         JPanel internalVariablesPanel = new JPanel(new BorderLayout());
         internalVariablesPanel.add(new JLabel("内置变量"), BorderLayout.NORTH);
-        internalVariables = new JTextArea(5, 20);
-        internalVariablesPanel.add(internalVariables, BorderLayout.CENTER);
+        this.internalVariables = new JTextArea(5, 20);
+        internalVariablesPanel.add(this.internalVariables, BorderLayout.CENTER);
 
         // Custom Variables Section
         JPanel customVariablesPanel = new JPanel(new BorderLayout());
         customVariablesPanel.add(new JLabel("自定义变量 (k=v形式使用分号分割)"), BorderLayout.NORTH);
-        customVariables = new JTextArea(5, 20);
-        customVariablesPanel.add(customVariables, BorderLayout.CENTER);
+        this.customVariables = new JTextArea(5, 20);
+        customVariablesPanel.add(this.customVariables, BorderLayout.CENTER);
 
         // Add all sections to the main panel
-        add(aiConfigPanel, BorderLayout.NORTH);
-        add(annotationConfigPanel, BorderLayout.CENTER);
+        this.add(aiConfigPanel, BorderLayout.NORTH);
+        this.add(annotationConfigPanel, BorderLayout.CENTER);
 
         // 合并底部两个面板为一个整体
         JPanel bottomPanel = new JPanel(new GridLayout(2, 1));
         bottomPanel.add(internalVariablesPanel);
         bottomPanel.add(customVariablesPanel);
-        add(bottomPanel, BorderLayout.SOUTH);
+        this.add(bottomPanel, BorderLayout.SOUTH);
 
         // 设置所有 JTextArea 的边框
-        classConfig.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
-        methodTemplate.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
-        fieldTemplate.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
-        internalVariables.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
-        customVariables.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
+        this.classConfig.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
+        this.methodTemplate.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
+        this.fieldTemplate.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
+        this.internalVariables.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
+        this.customVariables.setBorder(BorderFactory.createLineBorder(java.awt.Color.GRAY, 1));
     }
 
     @Test

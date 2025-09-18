@@ -19,6 +19,7 @@
       - Context menu actions for generating/removing comments<br/>
       - Velocity template engine support<br/>
       - Extensible architecture for future enhancements<br/>
+      - Property name conversion utilities<br/>
     ]]></description>
 
     <!-- Product and plugin compatibility requirements. -->
@@ -27,10 +28,11 @@
 
     <!-- Plugin metadata -->
     <change-notes><![CDATA[
-    Initial release with basic functionality:<br/>
-    - Settings configuration for JavaDoc templates<br/>
-    - Basic actions for generating/removing comments
-  ]]></change-notes>
+    Added property name conversion functionality:<br/>
+    - Convert selected property names between different formats<br/>
+    - Context menu action for property conversion<br/>
+    - Keyboard shortcut support (Ctrl+Shift+U)<br/>
+    ]]></change-notes>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="io.github.easy.tools.ui.config.DocConfigService"/>
@@ -73,6 +75,16 @@
                     class="io.github.easy.tools.action.doc.actions.RemoveFileCommentsAction"
                     text="删除当前文件注释"
                     description="删除当前文件注释"/>
+        </group>
+        
+        <group id="PropertyConversionGroup" text="属性转换" description="Property Conversion">
+            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="JavaDocMenus"/>
+            <action id="PropertyConversionAction"
+                    class="io.github.easy.tools.action.conversion.PropertyConversionAction"
+                    text="转换选中属性"
+                    description="将选中的属性名转换为不同格式">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift U"/>
+            </action>
         </group>
     </actions>
 </idea-plugin>

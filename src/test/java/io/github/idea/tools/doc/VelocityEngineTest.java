@@ -2,7 +2,7 @@ package io.github.idea.tools.doc;
 
 import io.github.easy.tools.service.doc.VelocityTemplateService;
 import org.apache.velocity.VelocityContext;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * <p> </p>
