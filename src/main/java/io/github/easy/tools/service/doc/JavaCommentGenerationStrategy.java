@@ -302,7 +302,7 @@ public class JavaCommentGenerationStrategy implements CommentGenerationStrategy 
         public String generateDoc(PsiFile file, P element) {
             // 1. 获取模板参数（基础 + 自定义 + 特定元素参数）
             Context context = this.createContext(file, element);
-            return this.templateRenderer.render(this.doGenerateDoc(file, element, context), context, element);
+            return this.doGenerateDoc(file, element, context);
         }
 
         /**

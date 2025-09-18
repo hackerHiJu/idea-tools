@@ -209,6 +209,7 @@ public class DocConfig implements Configurable {
                 || !Objects.equals(this.baseUrl.getText(), config.baseUrl)
                 || !Objects.equals(this.modelName.getText(), config.modelName)
                 || !Objects.equals(this.modelType.getSelectedItem(), config.modelType)
+                || !Objects.equals(this.classTemplate.getText(), config.classTemplate)
                 || !Objects.equals(this.methodTemplate.getText(), config.methodTemplate)
                 || !Objects.equals(this.fieldTemplate.getText(), config.fieldTemplate)
                 || !Objects.equals(this.customVar.getText(), config.customVar)
